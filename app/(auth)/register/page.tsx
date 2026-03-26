@@ -52,6 +52,8 @@ export default function RegisterPage() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [isEmailSent, setIsEmailSent] = useState(false)
+  const [submittedEmail, setSubmittedEmail] = useState("")
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -71,6 +73,8 @@ export default function RegisterPage() {
     setIsLoading(true)
     setFormError(null)
 
+    const redirectTo = `${window.location.origin}/auth-callback`
+
     const { data: signUpData, error } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
@@ -79,11 +83,20 @@ export default function RegisterPage() {
           name: data.name,
           role: data.role,
         },
+        emailRedirectTo: redirectTo,
       },
     })
 
     if (error || !signUpData.user) {
       setFormError(error?.message ?? "Unable to create account. Please try again.")
+      setIsLoading(false)
+      return
+    }
+
+    // If email confirmation is required, Supabase returns no session.
+    if (!signUpData.session) {
+      setSubmittedEmail(data.email)
+      setIsEmailSent(true)
       setIsLoading(false)
       return
     }
@@ -97,14 +110,17 @@ export default function RegisterPage() {
 
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .insert({
-        id: signUpData.user.id,
-        name: data.name,
-        email: data.email,
-        role: data.role,
-        avatar_url: null,
-        initials,
-      })
+      .upsert(
+        {
+          id: signUpData.user.id,
+          name: data.name,
+          email: data.email,
+          role: data.role,
+          avatar_url: null,
+          initials,
+        },
+        { onConflict: "id" }
+      )
       .select("*")
       .single()
 
@@ -125,8 +141,33 @@ export default function RegisterPage() {
     }
 
     setUserFromProfile(mockUserFromProfile)
-    router.push(data.role === "host" ? "/host" : "/host")
+    router.push(data.role === "host" ? "/host" : "/explore")
     setIsLoading(false)
+  }
+
+  if (isEmailSent) {
+    return (
+      <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Confirm your email</h1>
+          <p className="text-sm text-muted-foreground">
+            We sent a confirmation link to{" "}
+            <span className="font-medium text-foreground">{submittedEmail}</span>. Click it to finish creating your account.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <Button
+            size="lg"
+            asChild
+            className="w-full"
+            disabled={isLoading}
+          >
+            <Link href="/login">Go to login</Link>
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (

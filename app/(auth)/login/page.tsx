@@ -62,17 +62,42 @@ export default function LoginPage() {
       return
     }
 
-    const { data: profile, error: profileError } = await supabase
+    let { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", authData.user.id)
       .single()
 
     if (profileError || !profile) {
-      setFormError("Signed in, but your profile could not be loaded.")
-      setIsLoading(false)
-      // You might choose to still redirect even if profile is missing.
-      return
+      // Try to create the profile automatically if it doesn't exist
+      const name = authData.user.user_metadata?.name || authData.user.email?.split("@")[0] || "User"
+      const initials = name
+        .split(" ")
+        .map((n: string) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+        
+      const { data: newProfile, error: insertError } = await supabase
+        .from("profiles")
+        .insert({
+          id: authData.user.id,
+          name,
+          email: authData.user.email || "",
+          role: authData.user.user_metadata?.role || "client",
+          avatar_url: authData.user.user_metadata?.avatar_url || null,
+          initials,
+        })
+        .select("*")
+        .single()
+
+      if (insertError || !newProfile) {
+        setFormError("Signed in, but your profile could not be loaded or created automatically.")
+        setIsLoading(false)
+        return
+      }
+      
+      profile = newProfile
     }
 
     const mockUserFromProfile: MockUser = {
@@ -86,7 +111,7 @@ export default function LoginPage() {
     }
 
     setUserFromProfile(mockUserFromProfile)
-    router.push(profile.role === "host" ? "/host" : "/host")
+    router.push(profile.role === "host" ? "/host" : "/explore")
     setIsLoading(false)
   }
 

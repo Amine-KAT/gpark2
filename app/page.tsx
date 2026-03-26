@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation"
+import { AirbnbExploreMap } from "@/src/components/explore/AirbnbExploreMap"
 
 export default function RootPage() {
-  redirect("/login")
+  return <AirbnbExploreMap />
 }

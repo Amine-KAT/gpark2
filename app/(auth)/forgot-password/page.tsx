@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/form"
 import { Card, CardContent } from "@/components/ui/card"
 
+import { supabase } from "@/lib/supabaseClient"
+
 const forgotSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
 })
@@ -30,6 +32,7 @@ export default function ForgotPasswordPage() {
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [submittedEmail, setSubmittedEmail] = useState("")
   const [isResending, setIsResending] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   const form = useForm<ForgotFormValues>({
     resolver: zodResolver(forgotSchema),
@@ -37,17 +40,39 @@ export default function ForgotPasswordPage() {
   })
 
   async function onSubmit(data: ForgotFormValues) {
+    setFormError(null)
     setIsLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 800))
-    setSubmittedEmail(data.email)
-    setIsSubmitted(true)
-    setIsLoading(false)
+    try {
+      const redirectTo = `${window.location.origin}/reset-password`
+      const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
+        redirectTo,
+      })
+
+      if (error) {
+        setFormError(error.message)
+        setIsLoading(false)
+        return
+      }
+
+      setSubmittedEmail(data.email)
+      setIsSubmitted(true)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   async function handleResend() {
+    setFormError(null)
     setIsResending(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsResending(false)
+    try {
+      const redirectTo = `${window.location.origin}/reset-password`
+      const { error } = await supabase.auth.resetPasswordForEmail(submittedEmail, {
+        redirectTo,
+      })
+      if (error) setFormError(error.message)
+    } finally {
+      setIsResending(false)
+    }
   }
 
   // Step 2: Success state
@@ -127,6 +152,11 @@ export default function ForgotPasswordPage() {
       {/* Form */}
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-5">
+          {formError ? (
+            <p className="text-sm text-destructive" role="alert">
+              {formError}
+            </p>
+          ) : null}
           <FormField
             control={form.control}
             name="email"
